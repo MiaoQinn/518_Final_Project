@@ -6,9 +6,45 @@ from gensim import corpora, models
 import gensim
 from gensim.models import HdpModel
 import pandas as pd
-import test_semantic_similarity
+import re
+from textblob import TextBlob
 
+# helper function to split sentences
+alphabets= "([A-Za-z])"
+prefixes = "(Mr|St|Mrs|Ms|Dr)[.]"
+suffixes = "(Inc|Ltd|Jr|Sr|Co)"
+starters = "(Mr|Mrs|Ms|Dr|He\s|She\s|It\s|They\s|Their\s|Our\s|We\s|But\s|However\s|That\s|This\s|Wherever)"
+acronyms = "([A-Z][.][A-Z][.](?:[A-Z][.])?)"
+websites = "[.](com|net|org|io|gov)"
+digits = "([0-9])"
 
+def split_into_sentences(text):
+    text = " " + text + "  "
+    text = text.replace("\n"," ")
+    text = re.sub(prefixes,"\\1<prd>",text)
+    text = re.sub(websites,"<prd>\\1",text)
+    text = re.sub(digits + "[.]" + digits,"\\1<prd>\\2",text)
+    if "..." in text: text = text.replace("...","<prd><prd><prd>")
+    if "Ph.D" in text: text = text.replace("Ph.D.","Ph<prd>D<prd>")
+    text = re.sub("\s" + alphabets + "[.] "," \\1<prd> ",text)
+    text = re.sub(acronyms+" "+starters,"\\1<stop> \\2",text)
+    text = re.sub(alphabets + "[.]" + alphabets + "[.]" + alphabets + "[.]","\\1<prd>\\2<prd>\\3<prd>",text)
+    text = re.sub(alphabets + "[.]" + alphabets + "[.]","\\1<prd>\\2<prd>",text)
+    text = re.sub(" "+suffixes+"[.] "+starters," \\1<stop> \\2",text)
+    text = re.sub(" "+suffixes+"[.]"," \\1<prd>",text)
+    text = re.sub(" " + alphabets + "[.]"," \\1<prd>",text)
+    if "”" in text: text = text.replace(".”","”.")
+    if "\"" in text: text = text.replace(".\"","\".")
+    if "!" in text: text = text.replace("!\"","\"!")
+    if "?" in text: text = text.replace("?\"","\"?")
+    text = text.replace(".",".<stop>")
+    text = text.replace("?","?<stop>")
+    text = text.replace("!","!<stop>")
+    text = text.replace("<prd>",".")
+    sentences = text.split("<stop>")
+    sentences = sentences[:-1]
+    sentences = [s.strip() for s in sentences]
+    return sentences
 # import spacy for keywords set-dimension mapping
 nlp = spacy.load("en_core_web_sm")
 def semantic_similarity(cur_str, current_keyword):
@@ -16,6 +52,12 @@ def semantic_similarity(cur_str, current_keyword):
     tokens = nlp(cur_str)
     token1, token2 = tokens[0:len(tokens) - 1], tokens[len(tokens) - 1]
     return token1.similarity(token2)
+
+
+
+
+
+
 # Prepare keyword set
 # Food
 food_keywords = []
@@ -28,6 +70,10 @@ environment_keywords = []
 environment_str =""
 # preference matrix
 preference_matrix = []
+# sentiment matrix
+sentiment_matrix = []
+# rating matrix(each dimension)
+rating_matrix = []
 
 # import food.txt
 with open('food.txt') as f:
@@ -95,6 +141,7 @@ for index in range(0,len(current_reviews)):
         # add tokens to list
         texts.append(stemmed_tokens)
 
+    print(type(texts))
     # turn our tokenized documents into a id <-> term dictionary
     dictionary = corpora.Dictionary(texts)
     # convert tokenized documents into a document-term matrix
@@ -141,7 +188,33 @@ for index in range(0,len(current_reviews)):
     environment_dist = environment_prob/total
     # add to preference matrix
     preference_matrix.append([food_dist,service_dist,environment_dist])
-    print(len(preference_matrix))
+    # print(len(preference_matrix))
+
+    # break down each review into sentences and calculate polarity, allocate the polarity
+    food_sentiment =0
+    service_sentiment=0
+    environment_sentiment=0
+    # split the review
+    sentence_block = split_into_sentences(doc_a)
+    # for each words of the review, calculate relavance to dimension and assign the polarity
+    for sen in sentence_block:
+        blb = TextBlob(sen)
+        tp_polarity = blb.polarity
+        # tokenize each sentence and get the dimension
+        cur_texts = []
+        # clean and tokenize document string
+        raw = sen.lower()
+        tokens = tokenizer.tokenize(raw)
+        # remove stop words from tokens
+        stopped_tokens = [i for i in tokens if not i in en_stop]
+        # stem tokens
+        stemmed_tokens = [p_stemmer.stem(i) for i in stopped_tokens]
+        # add tokens to list
+        cur_texts.append(stemmed_tokens)
+        # calculate the frequency in each sentence and assign the polarity according to final probability distribution
+        sen_food_prob =0
+        sen_service_prob=0
+        sen_environment_prob=0
 
 print(preference_matrix)
 
