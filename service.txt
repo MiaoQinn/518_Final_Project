@@ -1,0 +1,14 @@
+service
+staff
+waiter
+chief
+serve
+enthusiasm
+patient
+ardor
+recommendation
+reception
+delivery
+manner
+attitude
+dignified
